@@ -130,6 +130,41 @@
 
   <!-- ================= SCRIPT ================= -->
   <script>
+
+    // 🚀 ระบบเปิดใน Chrome/Safari อัตโนมัติเมื่อเข้าผ่าน LINE / Facebook / Messenger
+  (function autoOpenInExternalBrowser() {
+    var ua = navigator.userAgent || navigator.vendor || window.opera;
+    var isLine = ua.indexOf("LINE") > -1;
+    var isFb = (ua.indexOf("FBAN") > -1) || (ua.indexOf("FBAV") > -1) || (ua.indexOf("Instagram") > -1);
+    
+    if (isLine || isFb) {
+      var currentUrl = window.location.href;
+
+      // ถ้าเป็น Android: บังคับเปิดด้วย Chrome ทันที
+      if (/Android/i.test(ua)) {
+        var chromeUrl = currentUrl.replace(/^https?:\/\//, '');
+        window.location.href = "intent://" + chromeUrl + "#Intent;scheme=https;package=com.android.chrome;end";
+      } 
+      // ถ้าเป็น iOS (iPhone/iPad) บน LINE: บังคับเปิดด้วย Safari ด้วยพารามิเตอร์ของ LINE
+      else if (/iPhone|iPad|iPod/i.test(ua)) {
+        if (isLine) {
+          var connector = currentUrl.indexOf('?') > -1 ? '&' : '?';
+          window.location.href = currentUrl + connector + "openExternalBrowser=1";
+        } else {
+          // สำหรับ iOS บน Facebook แสดงกล่องคำแนะนำแบบกะทัดรัด
+          document.addEventListener("DOMContentLoaded", function() {
+            document.body.innerHTML = `
+              <div style="padding: 30px; text-align: center; color: white; background: #001a4d; height: 100vh;">
+                <h2>⚠️ กรุณาเปิดใน Safari</h2>
+                <p>ระบบ Google Sign-In ไม่รองรับเบราว์เซอร์ของแอปนี้</p>
+                <p style="font-size: 18px; color: #ffeb3b;">กดจุด 3 จุด <b>(...)</b> ที่มุมขวาบน<br>แล้วเลือก <b>"Open in Safari"</b></p>
+              </div>`;
+          });
+        }
+      }
+    }
+  })();
+    
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxzfo9-MsOHweR6XHbmmhJ_Qtp6ZNAAOAERTCgarBijc0FYp7zMMmUoNmF7EFB-RO1c2g/exec";
     const CLIENT_ID = "131534824591-34tjld2b96cm3i85t26e3egqpp50370a.apps.googleusercontent.com";
     
