@@ -186,34 +186,51 @@
 }
 
     // 1. จัดการหลังล็อกอิน
-    function handleCredentialResponse(response) {
+    let currentEmail = "";
+let currentTodayIndex = -1; // ✨ เพิ่มตัวแปรเก็บตำแหน่งวันของวันนี้
+
+function handleCredentialResponse(response) {
   showLoginStatus("กำลังดึงข้อมูลประวัติการเช็คชื่อ...");
   currentEmail = parseJwt(response.credential).email;
 
   callGASAPI("checkUser", { email: currentEmail }, function(res) {
     if (res.success && res.isMember) {
-      // สลับหน้าจอ
       document.getElementById('loginView').style.display = "none";
       const dashboard = document.getElementById('dashboardView');
       dashboard.style.display = "flex";
       
-      document.getElementById('userName').innerText = (res.name || currentEmail);
+      document.getElementById('userName').innerText = "สวัสดี, " + (res.name || currentEmail);
 
-      // ✨ [ปรับแก้จุดนี้] วนลูปเช็คประวัติแสตมป์ 5 วัน
+      // ✨ บันทึกตำแหน่งวันของวันนี้ที่ส่งมาจาก Apps Script (เช่น วันที่ 3 จะได้ค่าเป็น 2)
+      if (res.todayIndex !== undefined) {
+        currentTodayIndex = res.todayIndex;
+      }
+
+      // วนลูปแสดงประวัติแสตมป์ตามจริง
       if (res.attendanceHistory && Array.isArray(res.attendanceHistory)) {
         res.attendanceHistory.forEach((status, index) => {
           const stamp = document.getElementById(`stamp-${index}`);
           if (stamp) {
             const cleanStatus = (status || "").toString().trim();
-            // เช็คว่ามีคำว่า "มา" อยู่ในช่องนั้นหรือไม่ (ตัดปัญหาเรื่องช่องว่าง)
             if (cleanStatus === "มา") {
-              stamp.classList.add("active"); // สลับเป็นรูปสี
+              stamp.classList.add("active");
             } else {
-              stamp.classList.remove("active"); // คงไว้เป็นขาวดำ
+              stamp.classList.remove("active");
             }
           }
         });
       }
+
+      if (!res.hasClubToday) {
+        lockButton("❌ วันนี้ไม่มีกำหนดการชมรม");
+      } else if (res.alreadyCheckedIn) {
+        showSuccess(res.todayDateStr);
+      }
+    } else {
+      showLoginStatus("❌ " + res.message);
+    }
+  });
+}
 
       // เช็คสถานะของวันนี้
       if (!res.hasClubToday) {
@@ -281,27 +298,30 @@
 
     // 2. ฟังก์ชันยืนยันส่งข้อมูลเช็คชื่อ
     function submitAttendance() {
-      clearTimeout(holdTimer);
-      btn.classList.remove('holding');
-      txt.innerText = "กำลังส่งข้อมูลบันทึกเวลา...";
-    
-      callGASAPI("markAttendance", { email: currentEmail }, function(res) {
-        if (res.success) {
-          // เปลี่ยนแสตมป์ของวันนี้ให้เป็นสี
-          // สมมติว่า GAS ส่ง res.todayIndex มา (เช่น 0 = วันแรก)
-          if(res.todayIndex !== undefined) {
-            document.getElementById(`stamp-${res.todayIndex}`).classList.add('active');
-          } else {
-            // ถ้าระบบไม่ได้ส่ง Index มา ให้หาดวงแรกที่ยังเป็นขาวดำแล้วลงสีแทน
-            const stamps = document.querySelectorAll('.stamp:not(.active)');
-            if(stamps.length > 0) stamps[0].classList.add('active');
-          }
-          showSuccess(res.todayDateStr);
-        } else {
-          txt.innerText = "❌ " + res.message;
+  clearTimeout(holdTimer);
+  btn.classList.remove('holding');
+  txt.innerText = "กำลังส่งข้อมูลบันทึกเวลา...";
+
+  callGASAPI("markAttendance", { email: currentEmail }, function(res) {
+    if (res.success) {
+      // ✨ ระบุตำแหน่งดวงของวันนี้แบบแม่นยำ
+      var targetIndex = (res.todayIndex !== undefined && res.todayIndex !== -1) 
+                        ? res.todayIndex 
+                        : currentTodayIndex;
+
+      if (targetIndex !== -1) {
+        const targetStamp = document.getElementById(`stamp-${targetIndex}`);
+        if (targetStamp) {
+          targetStamp.classList.add('active'); // ค่อยๆ เปลี่ยนแสตมป์ตรงวันให้เป็นสี
         }
-      });
+      }
+
+      showSuccess(res.todayDateStr);
+    } else {
+      txt.innerText = "❌ " + res.message;
     }
+  });
+}
 
     function showSuccess(dateStr) {
       isCheckedIn = true;
