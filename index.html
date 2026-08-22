@@ -6,34 +6,133 @@
   <title>ระบบเช็คชื่อเข้าชมรม</title>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
-    body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f4f6f9; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-    .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; max-width: 400px; width: 90%; }
-    #buttonDiv { display: flex; justify-content: center; margin-top: 15px; }
-    .status-box { margin-top: 20px; padding: 12px; border-radius: 6px; font-size: 14px; display: none; }
-    .info { background-color: #e3f2fd; color: #0d47a1; }
-    .success { background-color: #e8f5e9; color: #1b5e20; }
-    .error { background-color: #ffebee; color: #b71c1c; }
-    .btn-confirm { background-color: #2e7d32; color: white; border: none; padding: 12px; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 15px; width: 100%; display: none; }
+    /* ตั้งค่าฉากหลัง Gradient ดำ-น้ำเงิน และป้องกันการคลุมดำ/ซูมเมื่อกดค้างบนมือถือ */
+    body {
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      background: linear-gradient(to bottom right, #000000, #001a4d);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    /* ---------------- หน้าล็อกอิน ---------------- */
+    #loginView {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      padding: 30px;
+      border-radius: 12px;
+      text-align: center;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      width: 90%;
+      max-width: 400px;
+      transition: opacity 0.5s ease;
+    }
+    #loginView h2 { margin-top: 0; }
+    #buttonDiv { display: flex; justify-content: center; margin-top: 20px; }
+    .status-box { margin-top: 15px; padding: 10px; border-radius: 6px; font-size: 14px; display: none; background: rgba(255,255,255,0.8); color: #333; }
+
+    /* ---------------- หน้าเช็คชื่อ (Dashboard) ---------------- */
+    #dashboardView {
+      display: none; /* ซ่อนไว้ก่อนจนกว่าจะล็อกอินผ่าน */
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      animation: fadeIn 1s ease-in;
+    }
+
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .Stamp-container {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 40px;
+    }
+
+    /* สไตล์ของแสตมป์ */
+    .stamp {
+      width: 55px;
+      height: 55px;
+      object-fit: contain;
+      filter: grayscale(100%); /* ค่าเริ่มต้นเป็นขาวดำ */
+      opacity: 0.5;
+      transition: filter 1.5s ease, opacity 1.5s ease; /* ค่อยๆ เปลี่ยนสี */
+    }
+
+    /* คลาสเมื่อเช็คชื่อแล้วให้เป็นสีปกติ */
+    .stamp.active {
+      filter: grayscale(0%);
+      opacity: 1;
+    }
+
+    #text1 {
+      font-size: 18px;
+      margin-bottom: 25px;
+      min-height: 25px; /* ล็อกความสูงกันข้อความกระโดด */
+    }
+
+    /* สไตล์ของปุ่มกดค้าง */
+    #button {
+      width: 130px;
+      cursor: pointer;
+      transition: transform 0.3s ease;
+      filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));
+    }
+
+    /* แอนิเมชันขยายปุ่มเวลากดค้าง */
+    #button.holding {
+      transform: scale(1.15);
+    }
+    
+    /* ปุ่มถูกล็อกเมื่อเช็คชื่อแล้ว */
+    #button.disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: scale(1);
+    }
   </style>
 </head>
 <body>
 
-  <div class="card">
-    <h2>ระบบเช็คชื่อเข้าชมรม</h2>
+  <!-- ================= หน้าล็อกอิน ================= -->
+  <div id="loginView">
+    <h2>เข้าสู่ระบบชมรม</h2>
     <p>ลงชื่อเข้าใช้ด้วยอีเมลสถาบัน<br>(@feu.edu หรือ @feu.ac.th)</p>
-
     <div id="buttonDiv"></div>
     <div id="statusBox" class="status-box"></div>
-    <button id="checkInBtn" class="btn-confirm" onclick="submitAttendance()">ยืนยันลงชื่อเข้าชมรม</button>
   </div>
 
-  <script>
-    // 🔗 1. วาง Web App URL ที่ได้จาก Google Apps Script
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwd4cSERyJjNdbG3A-6vnrq0C5iyWOr0MBdIc8aC0cK2XZNUeE6Fcy_HpVR0OSDXoV5pg/exec";
+  <!-- ================= หน้าแสตมป์ ================= -->
+  <div id="dashboardView">
+    <h2 id="userName" style="margin-bottom: 30px;">ยินดีต้อนรับ</h2>
     
-    // 🔑 2. วาง Client ID จาก Google Cloud Console
-    const CLIENT_ID = "131534824591-34tjld2b96cm3i85t26e3egqpp50370a.apps.googleusercontent.com";
+    <!-- คอนเทนเนอร์รูปแสตมป์ 5 ดวง -->
+    <div class="Stamp-container">
+      <img src="image/Stamp.png" class="stamp" id="stamp-0" alt="Day 1">
+      <img src="image/Stamp.png" class="stamp" id="stamp-1" alt="Day 2">
+      <img src="image/Stamp.png" class="stamp" id="stamp-2" alt="Day 3">
+      <img src="image/Stamp.png" class="stamp" id="stamp-3" alt="Day 4">
+      <img src="image/Stamp.png" class="stamp" id="stamp-4" alt="Day 5">
+    </div>
 
+    <!-- ข้อความสถานะ -->
+    <p id="text1">กดปุ่มไอคอนค้างไว้เพื่อเช็คชื่อ</p>
+    
+    <!-- ปุ่มไอคอนเช็คชื่อ -->
+    <img src="image/buttonicon.png" id="button" alt="Hold to Check In">
+  </div>
+
+  <!-- ================= SCRIPT ================= -->
+  <script>
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwd4cSERyJjNdbG3A-6vnrq0C5iyWOr0MBdIc8aC0cK2XZNUeE6Fcy_HpVR0OSDXoV5pg/exec";
+    const CLIENT_ID = "131534824591-34tjld2b96cm3i85t26e3egqpp50370a.apps.googleusercontent.com";
+    
     let currentEmail = "";
 
     window.onload = function () {
@@ -41,66 +140,136 @@
         client_id: CLIENT_ID,
         callback: handleCredentialResponse
       });
-
       google.accounts.id.renderButton(
         document.getElementById("buttonDiv"),
-        { theme: "outline", size: "large", text: "signin_with", shape: "rectangular" }
+        { theme: "filled_blue", size: "large", shape: "rectangular" }
       );
     }
 
+    // 1. จัดการหลังล็อกอิน
     function handleCredentialResponse(response) {
-      showStatus("กำลังตรวจสอบข้อมูล...", "info");
-      const responsePayload = parseJwt(response.credential);
-      currentEmail = responsePayload.email;
+      showLoginStatus("กำลังดึงข้อมูลประวัติการเช็คชื่อ...");
+      currentEmail = parseJwt(response.credential).email;
 
-      // ส่งคำสั่งไปเช็คอีเมลกับ Google Apps Script API
       callGASAPI("checkUser", { email: currentEmail }, function(res) {
-        if (!res.success) {
-          showStatus("❌ " + res.message, "error");
-        } else if (!res.isMember) {
-          showStatus("❌ " + res.message + "<br>(" + res.email + ")", "error");
-        } else if (!res.hasClubToday) {
-          showStatus("📅 " + res.message, "info");
-        } else if (res.alreadyCheckedIn) {
-          showStatus("✅ คุณได้เช็คชื่อเข้าชมรมวันนี้เรียบร้อยแล้ว", "success");
+        if (res.success && res.isMember) {
+          // ซ่อนหน้าล็อกอิน & โชว์หน้าแสตมป์
+          document.getElementById('loginView').style.display = "none";
+          const dashboard = document.getElementById('dashboardView');
+          dashboard.style.display = "flex";
+          
+          document.getElementById('userName').innerText = "สวัสดี, " + (res.name || currentEmail);
+
+          // อัปเดตสีแสตมป์ตามข้อมูลใน Excel (มา = สี, ไม่มา/. = ขาวดำ)
+          // สมมติว่า GAS ส่ง res.attendanceHistory เป็น Array มา เช่น ["มา", "ไม่มา", ".", ".", "."]
+          if(res.attendanceHistory) {
+            res.attendanceHistory.forEach((status, index) => {
+              const stamp = document.getElementById(`stamp-${index}`);
+              if(stamp && status === "มา") {
+                stamp.classList.add("active");
+              }
+            });
+          }
+
+          // เช็คสถานะของวันนี้
+          if (!res.hasClubToday) {
+            lockButton("❌ วันนี้ไม่มีกำหนดการชมรม");
+          } else if (res.alreadyCheckedIn) {
+            showSuccess(res.todayDateStr);
+          }
         } else {
-          showStatus("พบบัญชี: " + res.email + "<br>พร้อมสำหรับการเช็คชื่อ", "info");
-          document.getElementById("checkInBtn").style.display = "block";
+          showLoginStatus("❌ " + res.message);
         }
       });
     }
 
+    // ================= ระบบกดค้าง (Hold to Confirm) =================
+    let holdTimer;
+    let isHolding = false;
+    let isCheckedIn = false;
+    const btn = document.getElementById('button');
+    const txt = document.getElementById('text1');
+
+    function startHold(e) {
+      if (isCheckedIn || btn.classList.contains('disabled')) return;
+      e.preventDefault(); // ป้องกันการคลุมดำหรือเด้งเมนูบนมือถือ
+      isHolding = true;
+      btn.classList.add('holding');
+      txt.innerText = "กำลังเช็คชื่อ... กรุณากดค้างไว้";
+
+      // ตั้งเวลา 1.5 วินาที ถ้ากดค้างถึงจะทำงาน
+      holdTimer = setTimeout(() => {
+        if (isHolding) submitAttendance();
+      }, 1500);
+    }
+
+    function cancelHold(e) {
+      if (isCheckedIn || btn.classList.contains('disabled')) return;
+      isHolding = false;
+      clearTimeout(holdTimer);
+      btn.classList.remove('holding');
+      if (txt.innerText === "กำลังเช็คชื่อ... กรุณากดค้างไว้") {
+        txt.innerText = "กดปุ่มไอคอนค้างไว้เพื่อเช็คชื่อ";
+      }
+    }
+
+    // ดักจับ Event ทั้งบนเมาส์และหน้าจอมือถือ
+    btn.addEventListener('mousedown', startHold);
+    btn.addEventListener('touchstart', startHold, {passive: false});
+    btn.addEventListener('mouseup', cancelHold);
+    btn.addEventListener('mouseleave', cancelHold);
+    btn.addEventListener('touchend', cancelHold);
+
+    // 2. ฟังก์ชันยืนยันส่งข้อมูลเช็คชื่อ
     function submitAttendance() {
-      showStatus("กำลังบันทึกการเช็คชื่อ...", "info");
-      document.getElementById("checkInBtn").style.display = "none";
+      clearTimeout(holdTimer);
+      btn.classList.remove('holding');
+      txt.innerText = "กำลังส่งข้อมูลบันทึกเวลา...";
 
       callGASAPI("markAttendance", { email: currentEmail }, function(res) {
         if (res.success) {
-          showStatus("🎉 " + res.message, "success");
+          // เปลี่ยนแสตมป์ของวันนี้ให้เป็นสี
+          // สมมติว่า GAS ส่ง res.todayIndex มา (เช่น 0 = วันแรก)
+          if(res.todayIndex !== undefined) {
+            document.getElementById(`stamp-${res.todayIndex}`).classList.add('active');
+          } else {
+            // ถ้าระบบไม่ได้ส่ง Index มา ให้หาดวงแรกที่ยังเป็นขาวดำแล้วลงสีแทน
+            const stamps = document.querySelectorAll('.stamp:not(.active)');
+            if(stamps.length > 0) stamps[0].classList.add('active');
+          }
+          showSuccess(res.todayDateStr);
         } else {
-          showStatus("❌ " + res.message, "error");
-          document.getElementById("checkInBtn").style.display = "block";
+          txt.innerText = "❌ " + res.message;
         }
       });
     }
 
-    // ฟังก์ชันยิง API ไปหา Google Apps Script
-    function callGASAPI(action, payload, callback) {
-      payload.action = action;
-      fetch(GAS_API_URL, {
-        method: "POST",
-        body: JSON.stringify(payload)
-      })
-      .then(res => res.json())
-      .then(data => callback(data))
-      .catch(err => showStatus("เกิดข้อผิดพลาดในการเชื่อมต่อ: " + err, "error"));
+    function showSuccess(dateStr) {
+      isCheckedIn = true;
+      const d = dateStr || new Date().toLocaleDateString('th-TH');
+      txt.innerText = `✅ คุณได้เช็คชื่อวันนี้แล้ว (${d})`;
+      btn.classList.add('disabled');
     }
 
-    function showStatus(text, type) {
+    function lockButton(msg) {
+      isCheckedIn = true;
+      txt.innerText = msg;
+      btn.classList.add('disabled');
+    }
+
+    // ================= Utils =================
+    function callGASAPI(action, payload, callback) {
+      payload.action = action;
+      fetch(GAS_API_URL, { method: "POST", body: JSON.stringify(payload) })
+        .then(res => res.json())
+        .then(data => callback(data))
+        .catch(err => showLoginStatus("เกิดข้อผิดพลาดในการเชื่อมต่อ"));
+    }
+
+    function showLoginStatus(text) {
       const box = document.getElementById("statusBox");
-      box.className = "status-box " + type;
-      box.innerHTML = text;
       box.style.display = "block";
+      box.innerText = text;
     }
 
     function parseJwt (token) {
