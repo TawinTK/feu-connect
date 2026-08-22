@@ -130,7 +130,7 @@
 
   <!-- ================= SCRIPT ================= -->
   <script>
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbycqdwAhftyEYDJiXhYLX50d9VeDMtSoJ8Y2jwJQr48oKxkDkjhPGVy-nKjErJqFoeE3Q/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxzfo9-MsOHweR6XHbmmhJ_Qtp6ZNAAOAERTCgarBijc0FYp7zMMmUoNmF7EFB-RO1c2g/exec";
     const CLIENT_ID = "131534824591-34tjld2b96cm3i85t26e3egqpp50370a.apps.googleusercontent.com";
     
     let currentEmail = "";
@@ -148,40 +148,59 @@
 
     // 1. จัดการหลังล็อกอิน
     function handleCredentialResponse(response) {
-      showLoginStatus("กำลังดึงข้อมูลประวัติการเช็คชื่อ...");
-      currentEmail = parseJwt(response.credential).email;
+  showLoginStatus("กำลังดึงข้อมูลประวัติการเช็คชื่อ...");
+  currentEmail = parseJwt(response.credential).email;
 
-      callGASAPI("checkUser", { email: currentEmail }, function(res) {
-        if (res.success && res.isMember) {
-          // ซ่อนหน้าล็อกอิน & โชว์หน้าแสตมป์
-          document.getElementById('loginView').style.display = "none";
-          const dashboard = document.getElementById('dashboardView');
-          dashboard.style.display = "flex";
-          
-          document.getElementById('userName').innerText = "สวัสดี, " + (res.name || currentEmail);
+  callGASAPI("checkUser", { email: currentEmail }, function(res) {
+    if (res.success && res.isMember) {
+      // สลับหน้าจอ
+      document.getElementById('loginView').style.display = "none";
+      const dashboard = document.getElementById('dashboardView');
+      dashboard.style.display = "flex";
+      
+      document.getElementById('userName').innerText = "สวัสดี, " + (res.name || currentEmail);
 
-          // อัปเดตสีแสตมป์ตามข้อมูลใน Excel (มา = สี, ไม่มา/. = ขาวดำ)
-          // สมมติว่า GAS ส่ง res.attendanceHistory เป็น Array มา เช่น ["มา", "ไม่มา", ".", ".", "."]
-          if(res.attendanceHistory) {
-            res.attendanceHistory.forEach((status, index) => {
-              const stamp = document.getElementById(`stamp-${index}`);
-              if(stamp && status === "มา") {
-                stamp.classList.add("active");
-              }
-            });
+      // ✨ [ปรับแก้จุดนี้] วนลูปเช็คประวัติแสตมป์ 5 วัน
+      if (res.attendanceHistory && Array.isArray(res.attendanceHistory)) {
+        res.attendanceHistory.forEach((status, index) => {
+          const stamp = document.getElementById(`stamp-${index}`);
+          if (stamp) {
+            // เช็คว่ามีคำว่า "มา" อยู่ในช่องนั้นหรือไม่ (ตัดปัญหาเรื่องช่องว่าง)
+            if (status && status.toString().trim().includes("มา")) {
+              stamp.classList.add("active"); // สลับเป็นรูปสี
+            } else {
+              stamp.classList.remove("active"); // คงไว้เป็นขาวดำ
+            }
           }
+        });
+      }
 
-          // เช็คสถานะของวันนี้
-          if (!res.hasClubToday) {
-            lockButton("❌ วันนี้ไม่มีกำหนดการชมรม");
-          } else if (res.alreadyCheckedIn) {
-            showSuccess(res.todayDateStr);
-          }
-        } else {
-          showLoginStatus("❌ " + res.message);
-        }
-      });
+      // เช็คสถานะของวันนี้
+      if (!res.hasClubToday) {
+        lockButton("❌ วันนี้ไม่มีกำหนดการชมรม");
+      } else if (res.alreadyCheckedIn) {
+        showSuccess(res.todayDateStr);
+      }
+    } else {
+      showLoginStatus("❌ " + res.message);
     }
+  });
+}
+
+    window.onload = function () {
+  google.accounts.id.initialize({
+    client_id: CLIENT_ID,
+    callback: handleCredentialResponse,
+    ux_mode: "popup",            // ✨ บังคับใช้ Popup Mode
+    auto_select: false,          // ✨ ปิดการเลือกล็อกอินอัตโนมัติ
+    context: "signin"
+  });
+
+  google.accounts.id.renderButton(
+    document.getElementById("buttonDiv"),
+    { theme: "filled_blue", size: "large", shape: "rectangular" }
+  );
+}
 
     // ================= ระบบกดค้าง (Hold to Confirm) =================
     let holdTimer;
@@ -225,7 +244,7 @@
       clearTimeout(holdTimer);
       btn.classList.remove('holding');
       txt.innerText = "กำลังส่งข้อมูลบันทึกเวลา...";
-
+    
       callGASAPI("markAttendance", { email: currentEmail }, function(res) {
         if (res.success) {
           // เปลี่ยนแสตมป์ของวันนี้ให้เป็นสี
