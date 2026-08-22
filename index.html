@@ -197,7 +197,7 @@
       const dashboard = document.getElementById('dashboardView');
       dashboard.style.display = "flex";
       
-      document.getElementById('userName').innerText = "สวัสดี, " + (res.name || currentEmail);
+      document.getElementById('userName').innerText = (res.name || currentEmail);
 
       // ✨ [ปรับแก้จุดนี้] วนลูปเช็คประวัติแสตมป์ 5 วัน
       if (res.attendanceHistory && Array.isArray(res.attendanceHistory)) {
