@@ -136,15 +136,19 @@
     let currentEmail = "";
 
     window.onload = function () {
-      google.accounts.id.initialize({
-        client_id: CLIENT_ID,
-        callback: handleCredentialResponse
-      });
-      google.accounts.id.renderButton(
-        document.getElementById("buttonDiv"),
-        { theme: "filled_blue", size: "large", shape: "rectangular" }
-      );
-    }
+  google.accounts.id.initialize({
+    client_id: CLIENT_ID,
+    callback: handleCredentialResponse,
+    ux_mode: "popup",
+    prompt: "select_account", // ✨ เพิ่มบรรทัดนี้: บังคับให้เลือกบัญชีและส่ง Token กลับบนมือถือ
+    auto_select: false
+  });
+
+  google.accounts.id.renderButton(
+    document.getElementById("buttonDiv"),
+    { theme: "filled_blue", size: "large", shape: "rectangular" }
+  );
+}
 
     // 1. จัดการหลังล็อกอิน
     function handleCredentialResponse(response) {
@@ -165,8 +169,9 @@
         res.attendanceHistory.forEach((status, index) => {
           const stamp = document.getElementById(`stamp-${index}`);
           if (stamp) {
+            const cleanStatus = (status || "").toString().trim();
             // เช็คว่ามีคำว่า "มา" อยู่ในช่องนั้นหรือไม่ (ตัดปัญหาเรื่องช่องว่าง)
-            if (status && status.toString().trim().includes("มา")) {
+            if (cleanStatus === "มา") {
               stamp.classList.add("active"); // สลับเป็นรูปสี
             } else {
               stamp.classList.remove("active"); // คงไว้เป็นขาวดำ
