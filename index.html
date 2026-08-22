@@ -2,11 +2,33 @@
 <html lang="th">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>ระบบเช็คชื่อเข้าชมรม</title>
+  
+  <!-- โหลด Google Sign-In SDK -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <script>
+    // 🚀 1. สคริปต์ช่วยเด้งไป Chrome/Safari อัตโนมัติเมื่อเข้าผ่าน LINE / Facebook
+    (function checkInAppBrowser() {
+      var ua = navigator.userAgent || navigator.vendor || window.opera;
+      var isLine = ua.indexOf("LINE") > -1;
+      var isFb = (ua.indexOf("FBAN") > -1) || (ua.indexOf("FBAV") > -1) || (ua.indexOf("Instagram") > -1);
+      
+      if (isLine || isFb) {
+        var currentUrl = window.location.href;
+        if (/Android/i.test(ua)) {
+          var chromeUrl = currentUrl.replace(/^https?:\/\//, '');
+          window.location.href = "intent://" + chromeUrl + "#Intent;scheme=https;package=com.android.chrome;end";
+        } else if (/iPhone|iPad|iPod/i.test(ua) && isLine) {
+          var connector = currentUrl.indexOf('?') > -1 ? '&' : '?';
+          window.location.href = currentUrl + connector + "openExternalBrowser=1";
+        }
+      }
+    })();
+  </script>
+
   <style>
-    /* ตั้งค่าฉากหลัง Gradient ดำ-น้ำเงิน และป้องกันการคลุมดำ/ซูมเมื่อกดค้างบนมือถือ */
     body {
       font-family: 'Segoe UI', Tahoma, sans-serif;
       margin: 0;
@@ -21,7 +43,6 @@
       user-select: none;
     }
 
-    /* ---------------- หน้าล็อกอิน ---------------- */
     #loginView {
       background: rgba(255, 255, 255, 0.1);
       backdrop-filter: blur(10px);
@@ -32,75 +53,35 @@
       border: 1px solid rgba(255, 255, 255, 0.2);
       width: 90%;
       max-width: 400px;
-      transition: opacity 0.5s ease;
     }
-    #loginView h2 { margin-top: 0; }
-    #buttonDiv { display: flex; justify-content: center; margin-top: 20px; }
-    .status-box { margin-top: 15px; padding: 10px; border-radius: 6px; font-size: 14px; display: none; background: rgba(255,255,255,0.8); color: #333; }
 
-    /* ---------------- หน้าเช็คชื่อ (Dashboard) ---------------- */
+    /* กล่องปุ่มล็อกอิน */
+    #buttonDiv {
+      display: flex;
+      justify-content: center;
+      margin-top: 20px;
+      min-height: 40px; /* ป้องกันปุ่มยุบตัว */
+    }
+
     #dashboardView {
-      display: none; /* ซ่อนไว้ก่อนจนกว่าจะล็อกอินผ่าน */
+      display: none;
       flex-direction: column;
       align-items: center;
       text-align: center;
-      animation: fadeIn 1s ease-in;
     }
 
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
-    .Stamp-container {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 40px;
-    }
-
-    /* สไตล์ของแสตมป์ */
-    .stamp {
-      width: 55px;
-      height: 55px;
-      object-fit: contain;
-      filter: grayscale(100%); /* ค่าเริ่มต้นเป็นขาวดำ */
-      opacity: 0.5;
-      transition: filter 1.5s ease, opacity 1.5s ease; /* ค่อยๆ เปลี่ยนสี */
-    }
-
-    /* คลาสเมื่อเช็คชื่อแล้วให้เป็นสีปกติ */
-    .stamp.active {
-      filter: grayscale(0%);
-      opacity: 1;
-    }
-
-    #text1 {
-      font-size: 18px;
-      margin-bottom: 25px;
-      min-height: 25px; /* ล็อกความสูงกันข้อความกระโดด */
-    }
-
-    /* สไตล์ของปุ่มกดค้าง */
-    #button {
-      width: 130px;
-      cursor: pointer;
-      transition: transform 0.3s ease;
-      filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));
-    }
-
-    /* แอนิเมชันขยายปุ่มเวลากดค้าง */
-    #button.holding {
-      transform: scale(1.15);
-    }
-    
-    /* ปุ่มถูกล็อกเมื่อเช็คชื่อแล้ว */
-    #button.disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      transform: scale(1);
-    }
+    .Stamp-container { display: flex; gap: 12px; margin-bottom: 40px; }
+    .stamp { width: 55px; height: 55px; object-fit: contain; filter: grayscale(100%); opacity: 0.5; transition: filter 1s, opacity 1s; }
+    .stamp.active { filter: grayscale(0%); opacity: 1; }
+    #text1 { font-size: 18px; margin-bottom: 25px; min-height: 25px; }
+    #button { width: 130px; cursor: pointer; transition: transform 0.3s; }
+    #button.holding { transform: scale(1.15); }
+    #button.disabled { opacity: 0.5; cursor: not-allowed; transform: scale(1); }
+    .status-box { margin-top: 15px; padding: 10px; border-radius: 6px; font-size: 14px; display: none; background: rgba(255,255,255,0.8); color: #333; }
   </style>
 </head>
 <body>
 
-  <!-- ================= หน้าล็อกอิน ================= -->
   <div id="loginView">
     <h2>เข้าสู่ระบบชมรม</h2>
     <p>ลงชื่อเข้าใช้ด้วยอีเมลสถาบัน<br>(@feu.edu หรือ @feu.ac.th)</p>
@@ -108,11 +89,9 @@
     <div id="statusBox" class="status-box"></div>
   </div>
 
-  <!-- ================= หน้าแสตมป์ ================= -->
   <div id="dashboardView">
     <h2 id="userName" style="margin-bottom: 30px;">ยินดีต้อนรับ</h2>
     
-    <!-- คอนเทนเนอร์รูปแสตมป์ 5 ดวง -->
     <div class="Stamp-container">
       <img src="image/Stamp.png" class="stamp" id="stamp-0" alt="Day 1">
       <img src="image/Stamp.png" class="stamp" id="stamp-1" alt="Day 2">
@@ -121,145 +100,76 @@
       <img src="image/Stamp.png" class="stamp" id="stamp-4" alt="Day 5">
     </div>
 
-    <!-- ข้อความสถานะ -->
     <p id="text1">กดปุ่มไอคอนค้างไว้เพื่อเช็คชื่อ</p>
-    
-    <!-- ปุ่มไอคอนเช็คชื่อ -->
     <img src="image/buttonicon.png" id="button" alt="Hold to Check In">
   </div>
 
-  <!-- ================= SCRIPT ================= -->
   <script>
-
-    // 🚀 ระบบเปิดใน Chrome/Safari อัตโนมัติเมื่อเข้าผ่าน LINE / Facebook / Messenger
-  (function autoOpenInExternalBrowser() {
-    var ua = navigator.userAgent || navigator.vendor || window.opera;
-    var isLine = ua.indexOf("LINE") > -1;
-    var isFb = (ua.indexOf("FBAN") > -1) || (ua.indexOf("FBAV") > -1) || (ua.indexOf("Instagram") > -1);
-    
-    if (isLine || isFb) {
-      var currentUrl = window.location.href;
-
-      // ถ้าเป็น Android: บังคับเปิดด้วย Chrome ทันที
-      if (/Android/i.test(ua)) {
-        var chromeUrl = currentUrl.replace(/^https?:\/\//, '');
-        window.location.href = "intent://" + chromeUrl + "#Intent;scheme=https;package=com.android.chrome;end";
-      } 
-      // ถ้าเป็น iOS (iPhone/iPad) บน LINE: บังคับเปิดด้วย Safari ด้วยพารามิเตอร์ของ LINE
-      else if (/iPhone|iPad|iPod/i.test(ua)) {
-        if (isLine) {
-          var connector = currentUrl.indexOf('?') > -1 ? '&' : '?';
-          window.location.href = currentUrl + connector + "openExternalBrowser=1";
-        } else {
-          // สำหรับ iOS บน Facebook แสดงกล่องคำแนะนำแบบกะทัดรัด
-          document.addEventListener("DOMContentLoaded", function() {
-            document.body.innerHTML = `
-              <div style="padding: 30px; text-align: center; color: white; background: #001a4d; height: 100vh;">
-                <h2>⚠️ กรุณาเปิดใน Safari</h2>
-                <p>ระบบ Google Sign-In ไม่รองรับเบราว์เซอร์ของแอปนี้</p>
-                <p style="font-size: 18px; color: #ffeb3b;">กดจุด 3 จุด <b>(...)</b> ที่มุมขวาบน<br>แล้วเลือก <b>"Open in Safari"</b></p>
-              </div>`;
-          });
-        }
-      }
-    }
-  })();
-    
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxzfo9-MsOHweR6XHbmmhJ_Qtp6ZNAAOAERTCgarBijc0FYp7zMMmUoNmF7EFB-RO1c2g/exec";
     const CLIENT_ID = "131534824591-34tjld2b96cm3i85t26e3egqpp50370a.apps.googleusercontent.com";
-    
-    let currentEmail = "";
 
+    let currentEmail = "";
+    let currentTodayIndex = -1;
+
+    // โหลดปุ่มเมื่อ SDK พร้อมทำงาน
     window.onload = function () {
-  google.accounts.id.initialize({
-    client_id: CLIENT_ID,
-    callback: handleCredentialResponse,
-    ux_mode: "popup",
-    prompt: "select_account", // ✨ เพิ่มบรรทัดนี้: บังคับให้เลือกบัญชีและส่ง Token กลับบนมือถือ
-    auto_select: false
-  });
-
-  google.accounts.id.renderButton(
-    document.getElementById("buttonDiv"),
-    { theme: "filled_blue", size: "large", shape: "rectangular" }
-  );
-}
-
-    // 1. จัดการหลังล็อกอิน
-    let currentEmail = "";
-let currentTodayIndex = -1; // ✨ เพิ่มตัวแปรเก็บตำแหน่งวันของวันนี้
-
-function handleCredentialResponse(response) {
-  showLoginStatus("กำลังดึงข้อมูลประวัติการเช็คชื่อ...");
-  currentEmail = parseJwt(response.credential).email;
-
-  callGASAPI("checkUser", { email: currentEmail }, function(res) {
-    if (res.success && res.isMember) {
-      document.getElementById('loginView').style.display = "none";
-      const dashboard = document.getElementById('dashboardView');
-      dashboard.style.display = "flex";
-      
-      document.getElementById('userName').innerText = "สวัสดี, " + (res.name || currentEmail);
-
-      // ✨ บันทึกตำแหน่งวันของวันนี้ที่ส่งมาจาก Apps Script (เช่น วันที่ 3 จะได้ค่าเป็น 2)
-      if (res.todayIndex !== undefined) {
-        currentTodayIndex = res.todayIndex;
-      }
-
-      // วนลูปแสดงประวัติแสตมป์ตามจริง
-      if (res.attendanceHistory && Array.isArray(res.attendanceHistory)) {
-        res.attendanceHistory.forEach((status, index) => {
-          const stamp = document.getElementById(`stamp-${index}`);
-          if (stamp) {
-            const cleanStatus = (status || "").toString().trim();
-            if (cleanStatus === "มา") {
-              stamp.classList.add("active");
-            } else {
-              stamp.classList.remove("active");
-            }
-          }
+      if (window.google && google.accounts) {
+        google.accounts.id.initialize({
+          client_id: CLIENT_ID,
+          callback: handleCredentialResponse,
+          ux_mode: "popup",
+          auto_select: false
         });
-      }
 
-      if (!res.hasClubToday) {
-        lockButton("❌ วันนี้ไม่มีกำหนดการชมรม");
-      } else if (res.alreadyCheckedIn) {
-        showSuccess(res.todayDateStr);
+        google.accounts.id.renderButton(
+          document.getElementById("buttonDiv"),
+          { theme: "filled_blue", size: "large", shape: "rectangular" }
+        );
+      } else {
+        showLoginStatus("ไม่สามารถโหลดระบบล็อกอินได้ กรุณารีเฟรชหน้าจอ");
       }
-    } else {
-      showLoginStatus("❌ " + res.message);
+    };
+
+    function handleCredentialResponse(response) {
+      showLoginStatus("กำลังดึงข้อมูลประวัติการเช็คชื่อ...");
+      currentEmail = parseJwt(response.credential).email;
+
+      callGASAPI("checkUser", { email: currentEmail }, function(res) {
+        if (res.success && res.isMember) {
+          document.getElementById('loginView').style.display = "none";
+          document.getElementById('dashboardView').style.display = "flex";
+          document.getElementById('userName').innerText = (res.name || currentEmail);
+
+          if (res.todayIndex !== undefined) {
+            currentTodayIndex = res.todayIndex;
+          }
+
+          if (res.attendanceHistory && Array.isArray(res.attendanceHistory)) {
+            res.attendanceHistory.forEach((status, index) => {
+              const stamp = document.getElementById(`stamp-${index}`);
+              if (stamp) {
+                const cleanStatus = (status || "").toString().trim();
+                if (cleanStatus === "มา") {
+                  stamp.classList.add("active");
+                } else {
+                  stamp.classList.remove("active");
+                }
+              }
+            });
+          }
+
+          if (!res.hasClubToday) {
+            lockButton("❌ วันนี้ไม่มีกำหนดการชมรม");
+          } else if (res.alreadyCheckedIn) {
+            showSuccess(res.todayDateStr);
+          }
+        } else {
+          showLoginStatus("❌ " + res.message);
+        }
+      });
     }
-  });
-}
 
-      // เช็คสถานะของวันนี้
-      if (!res.hasClubToday) {
-        lockButton("❌ วันนี้ไม่มีกำหนดการชมรม");
-      } else if (res.alreadyCheckedIn) {
-        showSuccess(res.todayDateStr);
-      }
-    } else {
-      showLoginStatus("❌ " + res.message);
-    }
-  });
-}
-
-    window.onload = function () {
-  google.accounts.id.initialize({
-    client_id: CLIENT_ID,
-    callback: handleCredentialResponse,
-    ux_mode: "popup",            // ✨ บังคับใช้ Popup Mode
-    auto_select: false,          // ✨ ปิดการเลือกล็อกอินอัตโนมัติ
-    context: "signin"
-  });
-
-  google.accounts.id.renderButton(
-    document.getElementById("buttonDiv"),
-    { theme: "filled_blue", size: "large", shape: "rectangular" }
-  );
-}
-
-    // ================= ระบบกดค้าง (Hold to Confirm) =================
+    // --- Hold to Confirm Logic ---
     let holdTimer;
     let isHolding = false;
     let isCheckedIn = false;
@@ -268,12 +178,11 @@ function handleCredentialResponse(response) {
 
     function startHold(e) {
       if (isCheckedIn || btn.classList.contains('disabled')) return;
-      e.preventDefault(); // ป้องกันการคลุมดำหรือเด้งเมนูบนมือถือ
+      e.preventDefault();
       isHolding = true;
       btn.classList.add('holding');
       txt.innerText = "กำลังเช็คชื่อ... กรุณากดค้างไว้";
 
-      // ตั้งเวลา 1.5 วินาที ถ้ากดค้างถึงจะทำงาน
       holdTimer = setTimeout(() => {
         if (isHolding) submitAttendance();
       }, 1500);
@@ -289,39 +198,35 @@ function handleCredentialResponse(response) {
       }
     }
 
-    // ดักจับ Event ทั้งบนเมาส์และหน้าจอมือถือ
     btn.addEventListener('mousedown', startHold);
     btn.addEventListener('touchstart', startHold, {passive: false});
     btn.addEventListener('mouseup', cancelHold);
     btn.addEventListener('mouseleave', cancelHold);
     btn.addEventListener('touchend', cancelHold);
 
-    // 2. ฟังก์ชันยืนยันส่งข้อมูลเช็คชื่อ
     function submitAttendance() {
-  clearTimeout(holdTimer);
-  btn.classList.remove('holding');
-  txt.innerText = "กำลังส่งข้อมูลบันทึกเวลา...";
+      clearTimeout(holdTimer);
+      btn.classList.remove('holding');
+      txt.innerText = "กำลังส่งข้อมูลบันทึกเวลา...";
 
-  callGASAPI("markAttendance", { email: currentEmail }, function(res) {
-    if (res.success) {
-      // ✨ ระบุตำแหน่งดวงของวันนี้แบบแม่นยำ
-      var targetIndex = (res.todayIndex !== undefined && res.todayIndex !== -1) 
-                        ? res.todayIndex 
-                        : currentTodayIndex;
+      callGASAPI("markAttendance", { email: currentEmail }, function(res) {
+        if (res.success) {
+          var targetIndex = (res.todayIndex !== undefined && res.todayIndex !== -1) 
+                            ? res.todayIndex 
+                            : currentTodayIndex;
 
-      if (targetIndex !== -1) {
-        const targetStamp = document.getElementById(`stamp-${targetIndex}`);
-        if (targetStamp) {
-          targetStamp.classList.add('active'); // ค่อยๆ เปลี่ยนแสตมป์ตรงวันให้เป็นสี
+          if (targetIndex !== -1) {
+            const targetStamp = document.getElementById(`stamp-${targetIndex}`);
+            if (targetStamp) {
+              targetStamp.classList.add('active');
+            }
+          }
+          showSuccess(res.todayDateStr);
+        } else {
+          txt.innerText = "❌ " + res.message;
         }
-      }
-
-      showSuccess(res.todayDateStr);
-    } else {
-      txt.innerText = "❌ " + res.message;
+      });
     }
-  });
-}
 
     function showSuccess(dateStr) {
       isCheckedIn = true;
@@ -336,7 +241,6 @@ function handleCredentialResponse(response) {
       btn.classList.add('disabled');
     }
 
-    // ================= Utils =================
     function callGASAPI(action, payload, callback) {
       payload.action = action;
       fetch(GAS_API_URL, { method: "POST", body: JSON.stringify(payload) })
@@ -354,7 +258,7 @@ function handleCredentialResponse(response) {
     function parseJwt (token) {
       var base64Url = token.split('.')[1];
       var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      var jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+      var jsonPayload = decodeURIComponent(window.atob(base64Url).split('').map(function(c) {
           return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
       }).join(''));
       return JSON.parse(jsonPayload);
