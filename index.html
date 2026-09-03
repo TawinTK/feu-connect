@@ -149,7 +149,7 @@ function handleCredentialResponse(response) {
     if (res.success && res.isMember) {
       document.getElementById('loginView').style.display = "none";
       document.getElementById('dashboardView').style.display = "flex";
-      document.getElementById('userName').innerText = "สวัสดี, " + (res.name || currentEmail);
+      document.getElementById('userName').innerText = (res.name || currentEmail);
 
       // บันทึกตำแหน่งวันของวันนี้
       if (res.todayIndex !== undefined) {
