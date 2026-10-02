@@ -112,12 +112,14 @@
 let currentTodayIndex = -1;
 
 window.onload = function () {
+  // 1. ตรวจสอบว่าเปิดผ่าน LINE / Facebook หรือไม่
+  checkInAppBrowser();
+
   if (window.google && google.accounts) {
     google.accounts.id.initialize({
       client_id: CLIENT_ID,
       callback: handleCredentialResponse,
-      ux_mode: "popup",               // ✨ บังคับใช้ Popup เท่านั้น (ไม่เปลี่ยนหน้าเว็บ)
-      use_fedcm_for_prompt: false,    // ✨ ปิด FedCM เพื่อป้องกันไม่ให้เด้งไปหน้า /gsi/transform
+      ux_mode: "redirect", // ✨ ใช้วิธี Redirect เพื่อไม่ให้ติด Pop-up Blocker บนมือถือ
       auto_select: false
     });
 
@@ -136,9 +138,15 @@ window.onload = function () {
   }
 };
 
+// 2. ฟังก์ชันจัดการ Token หลังล็อกอินเสร็จ (วิ่งกลับมาหน้าเดิมให้อัตโนมัติ)
 function handleCredentialResponse(response) {
   showLoginStatus("กำลังตรวจสอบบัญชีและประวัติการเช็คชื่อ...");
   
+  if (!response || !response.credential) {
+    showLoginStatus("❌ เกิดข้อผิดพลาดในการรับข้อมูลจาก Google");
+    return;
+  }
+
   var userData = parseJwt(response.credential);
   if (!userData || !userData.email) {
     showLoginStatus("❌ ไม่สามารถดึงข้อมูลอีเมลได้");
@@ -149,7 +157,7 @@ function handleCredentialResponse(response) {
 
   callGASAPI("checkUser", { email: currentEmail }, function(res) {
     if (res.success && res.isMember) {
-      // ซ่อนหน้าล็อกอิน แล้วโชว์หน้าแสตมป์ในหน้าเดิมทันที!
+      // ซ่อนหน้าล็อกอิน แล้วโชว์หน้าแสตมป์
       document.getElementById('loginView').style.display = "none";
       document.getElementById('dashboardView').style.display = "flex";
       document.getElementById('userName').innerText = "สวัสดี, " + (res.name || currentEmail);
@@ -158,7 +166,7 @@ function handleCredentialResponse(response) {
         currentTodayIndex = res.todayIndex;
       }
 
-      // แสดงสีแสตมป์ 5 วัน
+      // แสดงสีแสตมป์ตามประวัติจริงใน Excel
       if (res.attendanceHistory && Array.isArray(res.attendanceHistory)) {
         res.attendanceHistory.forEach((status, index) => {
           const stamp = document.getElementById(`stamp-${index}`);
@@ -184,7 +192,7 @@ function handleCredentialResponse(response) {
   });
 }
 
-// ฟังก์ชันถอดรหัส JWT รองรับภาษาไทยและอักขระพิเศษ
+// 3. ฟังก์ชันถอดรหัส JWT (UTF-8)
 function parseJwt (token) {
   try {
     var base64Url = token.split('.')[1];
