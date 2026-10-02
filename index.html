@@ -116,9 +116,8 @@ window.onload = function () {
     google.accounts.id.initialize({
       client_id: CLIENT_ID,
       callback: handleCredentialResponse,
-      ux_mode: "popup",               // ✨ บังคับใช้ Popup เท่านั้น (ไม่เปลี่ยนหน้าเว็บ)
-      use_fedcm_for_prompt: false,    // ✨ ปิด FedCM เพื่อป้องกันไม่ให้เด้งไปหน้า /gsi/transform
-      auto_select: false
+      auto_select: false,
+      use_fedcm_for_prompt: false // ✨ ป้องกันไม่ให้ Google เปลี่ยนหน้าไป /gsi/transform
     });
 
     google.accounts.id.renderButton(
@@ -139,26 +138,25 @@ window.onload = function () {
 function handleCredentialResponse(response) {
   showLoginStatus("กำลังตรวจสอบบัญชีและประวัติการเช็คชื่อ...");
   
-  var userData = parseJwt(response.credential);
-  if (!userData || !userData.email) {
+  try {
+    currentEmail = parseJwt(response.credential).email;
+  } catch (e) {
     showLoginStatus("❌ ไม่สามารถดึงข้อมูลอีเมลได้");
     return;
   }
-  
-  currentEmail = userData.email;
 
   callGASAPI("checkUser", { email: currentEmail }, function(res) {
     if (res.success && res.isMember) {
-      // ซ่อนหน้าล็อกอิน แล้วโชว์หน้าแสตมป์ในหน้าเดิมทันที!
       document.getElementById('loginView').style.display = "none";
       document.getElementById('dashboardView').style.display = "flex";
-      document.getElementById('userName').innerText = "สวัสดี, " + (res.name || currentEmail);
+      document.getElementById('userName').innerText = (res.name || currentEmail);
 
+      // บันทึกตำแหน่งวันของวันนี้
       if (res.todayIndex !== undefined) {
         currentTodayIndex = res.todayIndex;
       }
 
-      // แสดงสีแสตมป์ 5 วัน
+      // แสดงสีแสตมป์ตามประวัติจริงใน Excel
       if (res.attendanceHistory && Array.isArray(res.attendanceHistory)) {
         res.attendanceHistory.forEach((status, index) => {
           const stamp = document.getElementById(`stamp-${index}`);
@@ -184,19 +182,121 @@ function handleCredentialResponse(response) {
   });
 }
 
-// ฟังก์ชันถอดรหัส JWT รองรับภาษาไทยและอักขระพิเศษ
-function parseJwt (token) {
+// ✨ ฟังก์ชันถอดรหัส JWT Token แบบปลอดภัย ไม่เด้งข้อผิดพลาด
+function parseJwt(token) {
+  var base64Url = token.split('.')[1];
+  var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+  var jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+  }).join(''));
+  return JSON.parse(jsonPayload);
+}
+
+    // --- Hold to Confirm Logic ---
+    let holdTimer;
+    let isHolding = false;
+    let isCheckedIn = false;
+    const btn = document.getElementById('button');
+    const txt = document.getElementById('text1');
+
+    function startHold(e) {
+      if (isCheckedIn || btn.classList.contains('disabled')) return;
+      e.preventDefault();
+      isHolding = true;
+      btn.classList.add('holding');
+      txt.innerText = "กำลังเช็คชื่อ... กรุณากดค้างไว้";
+
+      holdTimer = setTimeout(() => {
+        if (isHolding) submitAttendance();
+      }, 1500);
+    }
+
+    function cancelHold(e) {
+      if (isCheckedIn || btn.classList.contains('disabled')) return;
+      isHolding = false;
+      clearTimeout(holdTimer);
+      btn.classList.remove('holding');
+      if (txt.innerText === "กำลังเช็คชื่อ... กรุณากดค้างไว้") {
+        txt.innerText = "กดปุ่มไอคอนค้างไว้เพื่อเช็คชื่อ";
+      }
+    }
+
+    btn.addEventListener('mousedown', startHold);
+    btn.addEventListener('touchstart', startHold, {passive: false});
+    btn.addEventListener('mouseup', cancelHold);
+    btn.addEventListener('mouseleave', cancelHold);
+    btn.addEventListener('touchend', cancelHold);
+
+    function submitAttendance() {
+      clearTimeout(holdTimer);
+      btn.classList.remove('holding');
+      txt.innerText = "กำลังส่งข้อมูลบันทึกเวลา...";
+
+      callGASAPI("markAttendance", { email: currentEmail }, function(res) {
+        if (res.success) {
+          var targetIndex = (res.todayIndex !== undefined && res.todayIndex !== -1) 
+                            ? res.todayIndex 
+                            : currentTodayIndex;
+
+          if (targetIndex !== -1) {
+            const targetStamp = document.getElementById(`stamp-${targetIndex}`);
+            if (targetStamp) {
+              targetStamp.classList.add('active');
+            }
+          }
+          showSuccess(res.todayDateStr);
+        } else {
+          txt.innerText = "❌ " + res.message;
+        }
+      });
+    }
+
+    function showSuccess(dateStr) {
+      isCheckedIn = true;
+      const d = dateStr || new Date().toLocaleDateString('th-TH');
+      txt.innerText = `✅ คุณได้เช็คชื่อวันนี้แล้ว (${d})`;
+      btn.classList.add('disabled');
+    }
+
+    function lockButton(msg) {
+      isCheckedIn = true;
+      txt.innerText = msg;
+      btn.classList.add('disabled');
+    }
+
+    function callGASAPI(action, payload, callback) {
+      payload.action = action;
+      fetch(GAS_API_URL, { method: "POST", body: JSON.stringify(payload) })
+        .then(res => res.json())
+        .then(data => callback(data))
+        .catch(err => showLoginStatus("เกิดข้อผิดพลาดในการเชื่อมต่อ"));
+    }
+
+    function showLoginStatus(text) {
+      const box = document.getElementById("statusBox");
+      box.style.display = "block";
+      box.innerText = text;
+    }
+
+    function parseJwt (token) {
   try {
     var base64Url = token.split('.')[1];
     var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    while (base64.length % 4) { base64 += '='; }
+    
+    // เติม Padding (=) ให้ Base64 สมบูรณ์ป้องกัน Error
+    while (base64.length % 4) {
+      base64 += '=';
+    }
+    
+    // ถอดรหัสรองรับอักขระ UTF-8 ทุกภาษา
     var jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
         return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
     }).join(''));
+
     return JSON.parse(jsonPayload);
   } catch (e) {
     console.error("JWT Parse Error:", e);
-    return null;
+    return {};
   }
 }
   </script>
